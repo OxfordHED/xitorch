@@ -1,4 +1,4 @@
-from typing import Callable, Mapping, Any, Sequence, Union, List
+from typing import Callable, Mapping, Any, Sequence, Union, List, Tuple
 import torch
 from xitorch._utils.misc import TensorNonTensorSeparator, get_method
 from xitorch._utils.assertfuncs import assert_fcn_params
@@ -38,7 +38,8 @@ def rootfinder(
         params: Sequence[Any] = [],
         bck_options: Mapping[str, Any] = {},
         method: Union[str, Callable, None] = None,
-        **fwd_options) -> torch.Tensor:
+        return_history: bool = False,
+        **fwd_options) -> Union[torch.Tensor, Tuple[torch.Tensor, List[torch.Tensor]]]:
     r"""
     Solving the rootfinder equation of a given function,
 
@@ -64,6 +65,8 @@ def rootfinder(
         Method-specific options for the backward solve (see :func:`xitorch.linalg.solve`)
     method : str or callable or None
         Rootfinder method. If None, it will choose ``"broyden1"``.
+    return_history : bool
+        If True return list of densities from self-consistency cycles
     **fwd_options
         Method-specific options (see method section)
 
@@ -98,6 +101,7 @@ def rootfinder(
 
     pfunc = get_pure_function(fcn)
     fwd_options["method"] = _get_rootfinder_default_method(method)
+    fwd_options['return_history'] = return_history
     return _RootFinder.apply(pfunc, y0, pfunc, "rootfinder", fwd_options, bck_options,
                              len(params), *params, *pfunc.objparams())
 
@@ -107,7 +111,8 @@ def equilibrium(
         params: Sequence[Any] = [],
         bck_options: Mapping[str, Any] = {},
         method: Union[str, Callable, None] = None,
-        **fwd_options) -> torch.Tensor:
+        return_history: bool = False,
+        **fwd_options) -> Union[torch.Tensor, Tuple[torch.Tensor, List[torch.Tensor]]]:
     r"""
     Solving the equilibrium equation of a given function,
 
@@ -133,6 +138,8 @@ def equilibrium(
         Method-specific options for the backward solve (see :func:`xitorch.linalg.solve`)
     method : str or None
         Rootfinder method. If None, it will choose ``"broyden1"``.
+    return_history : bool
+        If True return list of densities from self-consistency cycles
     **fwd_options
         Method-specific options (see method section)
 
@@ -178,6 +185,7 @@ def equilibrium(
 
     method = _get_equilibrium_default_method(method)
     fwd_options["method"] = method
+    fwd_options["return_history"] = return_history
     fwd_fcn = pfunc if method in _EQUIL_METHODS else new_fcn
     alg_type = "equilibrium" if method in _EQUIL_METHODS else "rootfinder"
     return _RootFinder.apply(new_fcn, y0, fwd_fcn, alg_type, fwd_options, bck_options,
@@ -189,7 +197,8 @@ def minimize(
         params: Sequence[Any] = [],
         bck_options: Mapping[str, Any] = {},
         method: Union[None, str, Callable] = None,
-        **fwd_options) -> torch.Tensor:
+        return_history: bool = False,
+        **fwd_options) -> Union[torch.Tensor, Tuple[torch.Tensor, List[torch.Tensor]]]:
     r"""
     Solve the unbounded minimization problem:
 
@@ -212,6 +221,8 @@ def minimize(
         Method-specific options for the backward solve (see :func:`xitorch.linalg.solve`)
     method: str or callable or None
         Minimization method. If None, it will choose ``"broyden1"``.
+    return_history : bool
+        If True return list of densities from self-consistency cycles
     **fwd_options
         Method-specific options (see method section)
 
@@ -249,6 +260,7 @@ def minimize(
     pfunc = get_pure_function(fcn)
 
     fwd_options["method"] = _get_minimizer_default_method(method)
+    fwd_options["return_history"] = return_history
     method = fwd_options["method"]
 
     # minimization can use rootfinder algorithm, so check if it is actually
@@ -301,6 +313,7 @@ class _RootFinder(torch.autograd.Function):
         # set default options
         config = options
         ctx.bck_options = bck_options
+        return_history = config.get("return_history", False)
 
         params = allparams[:nparams]
         objparams = allparams[nparams:]
@@ -315,7 +328,7 @@ class _RootFinder(torch.autograd.Function):
             }[alg_type]
             name = alg_type
             method_fcn = get_method(name, methods, method)
-            y = method_fcn(fwd_fcn, y0, params, **config)
+            result = method_fcn(fwd_fcn, y0, params, **config)
 
         ctx.fcn = fcn
 
@@ -323,9 +336,13 @@ class _RootFinder(torch.autograd.Function):
         ctx.nparams = nparams
         ctx.param_sep = TensorNonTensorSeparator(allparams)
         tensor_params = ctx.param_sep.get_tensor_params()
-        ctx.save_for_backward(y, *tensor_params)
-
-        return y
+        if isinstance(result, tuple):
+            y, density_history = result
+            ctx.save_for_backward(y, *tensor_params)
+            return (y, density_history) if return_history else y
+        else:
+            ctx.save_for_backward(result, *tensor_params)
+            return result
 
     @staticmethod
     def backward(ctx, grad_yout):
