@@ -1,4 +1,5 @@
-from typing import Callable, Mapping, Any, Sequence, Union, List, Tuple
+from __future__ import annotations
+from typing import Callable, Mapping, Any, Sequence, Union, List
 import torch
 from xitorch._utils.misc import TensorNonTensorSeparator, get_method
 from xitorch._utils.assertfuncs import assert_fcn_params
@@ -39,7 +40,7 @@ def rootfinder(
         bck_options: Mapping[str, Any] = {},
         method: Union[str, Callable, None] = None,
         return_history: bool = False,
-        **fwd_options) -> Union[torch.Tensor, Tuple[torch.Tensor, List[torch.Tensor]]]:
+        **fwd_options) -> torch.Tensor | tuple[torch.Tensor, list[torch.Tensor]]:
     r"""
     Solving the rootfinder equation of a given function,
 
@@ -66,7 +67,7 @@ def rootfinder(
     method : str or callable or None
         Rootfinder method. If None, it will choose ``"broyden1"``.
     return_history : bool
-        If True return list of densities from self-consistency cycles
+        If True return list of all (intermediate) values from self-consistency cycles
     **fwd_options
         Method-specific options (see method section)
 
@@ -112,7 +113,7 @@ def equilibrium(
         bck_options: Mapping[str, Any] = {},
         method: Union[str, Callable, None] = None,
         return_history: bool = False,
-        **fwd_options) -> Union[torch.Tensor, Tuple[torch.Tensor, List[torch.Tensor]]]:
+        **fwd_options) -> torch.Tensor | tuple[torch.Tensor, list[torch.Tensor]]:
     r"""
     Solving the equilibrium equation of a given function,
 
@@ -139,7 +140,7 @@ def equilibrium(
     method : str or None
         Rootfinder method. If None, it will choose ``"broyden1"``.
     return_history : bool
-        If True return list of densities from self-consistency cycles
+        If True return list of all (intermediate) values from self-consistency cycles
     **fwd_options
         Method-specific options (see method section)
 
@@ -198,7 +199,7 @@ def minimize(
         bck_options: Mapping[str, Any] = {},
         method: Union[None, str, Callable] = None,
         return_history: bool = False,
-        **fwd_options) -> Union[torch.Tensor, Tuple[torch.Tensor, List[torch.Tensor]]]:
+        **fwd_options) -> torch.Tensor | tuple[torch.Tensor, list[torch.Tensor]]:
     r"""
     Solve the unbounded minimization problem:
 
@@ -222,7 +223,7 @@ def minimize(
     method: str or callable or None
         Minimization method. If None, it will choose ``"broyden1"``.
     return_history : bool
-        If True return list of densities from self-consistency cycles
+        If True return list of all (intermediate) values from self-consistency cycles
     **fwd_options
         Method-specific options (see method section)
 
@@ -337,9 +338,9 @@ class _RootFinder(torch.autograd.Function):
         ctx.param_sep = TensorNonTensorSeparator(allparams)
         tensor_params = ctx.param_sep.get_tensor_params()
         if isinstance(result, tuple):
-            y, density_history = result
+            y, x_history = result
             ctx.save_for_backward(y, *tensor_params)
-            return (y, density_history) if return_history else y
+            return (y, x_history) if return_history else y
         else:
             ctx.save_for_backward(result, *tensor_params)
             return result
