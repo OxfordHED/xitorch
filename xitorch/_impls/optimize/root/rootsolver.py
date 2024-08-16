@@ -1,8 +1,8 @@
 # file mostly from SciPy:
 # https://github.com/scipy/scipy/blob/914523af3bc03fe7bf61f621363fca27e97ca1d6/scipy/optimize/nonlin.py#L221
 # and converted to PyTorch for GPU efficiency
-
-from typing import Dict, Any, Optional, Union, Tuple, List
+from __future__ import annotations
+from typing import Dict, Any, Optional, Union, Tuple
 import warnings
 import torch
 import functools
@@ -24,7 +24,7 @@ def _nonlin_solver(fcn, x0, params,
                    verbose=False,
                    custom_terminator=None,
                    return_history=False,
-                   **unused) -> Tuple[torch.Tensor, List[torch.Tensor]]:
+                   **unused) -> torch.Tensor | tuple[torch.Tensor, list[torch.Tensor]]:
     """
     Keyword arguments
     -----------------
@@ -42,9 +42,11 @@ def _nonlin_solver(fcn, x0, params,
         Options to perform line search. If ``True``, it is set to ``"armijo"``.
     verbose: bool
         Options for verbosity
+    return_history: bool
+        Option to return list of all x values throughout optimization process. Returns x_history: list[torch.Tensor]
     """
 
-    density_history = []
+    x_history = []
 
     if maxiter is None:
         maxiter = 100 * (torch.numel(x0) + 1)
@@ -98,7 +100,7 @@ def _nonlin_solver(fcn, x0, params,
     best_dxnorm = x.norm()
     best_iter = 0
     for i in range(maxiter):
-        density_history.append(_pack(x.clone()))  # save current density
+        x_history.append(_pack(x.clone()))  # save current x
 
         tol = min(eta, eta * y_norm)
         dx = -jacobian.solve(y, tol=tol)
@@ -152,9 +154,9 @@ def _nonlin_solver(fcn, x0, params,
                "Best |dx|=%.3e, |f|=%.3e at iter %d") % (maxiter, best_dxnorm, best_ynorm, best_iter)
         warnings.warn(ConvergenceWarning(msg))
         x = best_x
-    density_history.append(_pack(x.clone()))  # save final density
+    x_history.append(_pack(x.clone()))  # save final densxity
     if return_history:
-        return _pack(x), density_history
+        return _pack(x), x_history
     else:
         return _pack(x)
 
@@ -163,7 +165,7 @@ def newton(fcn, x0, params=(), *,
            solver_method: str = "exactsolve",
            solver_kwargs: Optional[Dict[str, Any]] = None,
            return_history=False,
-           **kwargs) -> Union[torch.Tensor, Tuple[torch.Tensor, List[torch.Tensor]]]:
+           **kwargs) -> torch.Tensor | tuple[torch.Tensor, list[torch.Tensor]]:
     """
     Solve the root finder using the Newton method. In root finding task, Newton's method goes as follows:
 
@@ -181,6 +183,9 @@ def newton(fcn, x0, params=(), *,
     solver_kwargs: dict or None
         The keyword arguments for the solver method. The list of available keyword arguments
         can be found in :class:`xitorch.linalg.solve`.
+    return_history: bool
+        Option to return list of all x values throughout _nonlin_solver optimization process.
+        Returns list[torch.Tensor].
     """
     jacobian = NewtonJacobian(solver_method=solver_method, solver_kwargs=solver_kwargs)
     return _nonlin_solver(fcn, x0, params, jacobian=jacobian, return_history=return_history, **kwargs)
@@ -191,7 +196,7 @@ def broyden1(fcn, x0, params=(), *,
              uv0: Optional[Union[str, Tuple[torch.Tensor, torch.Tensor]]] = None,
              max_rank: Optional[int] = None,
              return_history=False,
-             **kwargs) -> Union[torch.Tensor, Tuple[torch.Tensor, List[torch.Tensor]]]:
+             **kwargs) -> torch.Tensor | tuple[torch.Tensor, list[torch.Tensor]]:
     """
     Solve the root finder or linear equation using the first Broyden method [1]_.
     It can be used to solve minimization by finding the root of the
@@ -215,6 +220,9 @@ def broyden1(fcn, x0, params=(), *,
     max_rank: int or None
         The maximum rank of inverse Jacobian approximation. If ``None``, it
         is ``inf``.
+    return_history: bool
+        Option to return list of all x values throughout _nonlin_solver optimization process.
+        Returns list[torch.Tensor].
     """
     jacobian = BroydenFirst(alpha=alpha, uv0=uv0, max_rank=max_rank)
     return _nonlin_solver(fcn, x0, params, jacobian=jacobian, return_history=return_history, **kwargs)
@@ -226,7 +234,7 @@ def broyden2(fcn, x0, params=(), *,
              uv0: Optional[Union[str, Tuple[torch.Tensor, torch.Tensor]]] = None,
              max_rank: Optional[int] = None,
              return_history=False,
-             **kwargs) -> Union[torch.Tensor, Tuple[torch.Tensor, List[torch.Tensor]]]:
+             **kwargs) -> torch.Tensor | tuple[torch.Tensor, list[torch.Tensor]]:
     """
     Solve the root finder or linear equation using the second Broyden method [2]_.
     It can be used to solve minimization by finding the root of the
@@ -250,6 +258,9 @@ def broyden2(fcn, x0, params=(), *,
     max_rank: int or None
         The maximum rank of inverse Jacobian approximation. If ``None``, it
         is ``inf``.
+    return_history: bool
+        Option to return list of all x values throughout _nonlin_solver optimization process.
+        Returns list[torch.Tensor].
     """
     jacobian = BroydenSecond(alpha=alpha, uv0=uv0, max_rank=max_rank)
     return _nonlin_solver(fcn, x0, params, jacobian=jacobian, return_history=return_history, **kwargs)
@@ -261,7 +272,7 @@ def linearmixing(fcn, x0, params=(), *,
                  # history return parameter
                  return_history=False,
                  # solver parameters
-                 **kwargs) -> Union[torch.Tensor, Tuple[torch.Tensor, List[torch.Tensor]]]:
+                 **kwargs) -> torch.Tensor | tuple[torch.Tensor, list[torch.Tensor]]:
     """
     Solve the root finding problem by approximating the inverse of Jacobian
     to be a constant scalar.
@@ -270,6 +281,9 @@ def linearmixing(fcn, x0, params=(), *,
     -----------------
     alpha: float or None
         The initial guess of inverse Jacobian is ``-alpha * I``.
+    return_history: bool
+        Option to return list of all x values throughout _nonlin_solver optimization process.
+        Returns list[torch.Tensor].
     """
     jacobian = LinearMixing(alpha=alpha)
     return _nonlin_solver(fcn, x0, params, jacobian=jacobian, return_history=return_history, **kwargs)
