@@ -315,6 +315,7 @@ class _RootFinder(torch.autograd.Function):
         config = options
         ctx.bck_options = bck_options
         return_history = config.get("return_history", False)
+        ctx.residual_penalty = config.get("residual_penalty", 0.0)
 
         params = allparams[:nparams]
         objparams = allparams[nparams:]
@@ -351,6 +352,7 @@ class _RootFinder(torch.autograd.Function):
         yout = ctx.saved_tensors[0]
         nparams = ctx.nparams
         fcn = ctx.fcn
+        residual_penalty = ctx.residual_penalty
 
         # merge the tensor and nontensor parameters
         tensor_params = ctx.saved_tensors[1:]
@@ -374,6 +376,8 @@ class _RootFinder(torch.autograd.Function):
                 objparams_copy = allparams_copy[nparams:]
                 with ctx.fcn.useobjparams(objparams_copy):
                     yfcn = fcn(yout, *params_copy)
+
+                gyfcn -= residual_penalty * yfcn
 
             grad_tensor_params = torch.autograd.grad(yfcn, tensor_params_copy, grad_outputs=gyfcn,
                                                      create_graph=torch.is_grad_enabled(),
