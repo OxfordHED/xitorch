@@ -377,7 +377,7 @@ class _RootFinder(torch.autograd.Function):
                 with ctx.fcn.useobjparams(objparams_copy):
                     yfcn = fcn(yout, *params_copy)
 
-                gyfcn -= residual_penalty * yfcn * gyfcn.norm() / yfcn.norm()
+            gyfcn -= residual_penalty * yfcn * gyfcn.norm() / yfcn.norm()
 
             grad_tensor_params = torch.autograd.grad(yfcn, tensor_params_copy, grad_outputs=gyfcn,
                                                      create_graph=torch.is_grad_enabled(),
