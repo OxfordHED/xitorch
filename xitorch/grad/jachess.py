@@ -212,7 +212,7 @@ def connect_graph(out, params):
     # is disconnected in calculating df/dy.
     # Skip complex-valued parameters: multiplying by 0 would promote
     # the sum (and hence the Jacobian) to complex, breaking
-    # torch.linalg.solve which requires matching dtypes.
+    # torch.linalg.solve which requires matching dtypes. Important for FNO/GINO implementations.
     real_params = [p for p in params if p.is_floating_point() and not p.is_complex()]
     if not real_params:
         return out
